@@ -20,8 +20,8 @@ int reduce_sum(mpiex::communicator comm, float a) {
     a = a + b;
   }
   if(right<p) {
-    auto fu = recv(comm, right, b);
-    fu.wait();
+    auto fu = mpiex::receive<float>(comm, right);
+    b = fu.get();
     a = a + b;
   }
   if(rank>0) {

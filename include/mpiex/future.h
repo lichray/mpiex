@@ -1006,8 +1006,8 @@ template <class _Rp, class _Fp>
 void
 __mpi_assoc_state<_Rp, _Fp>::__execute()
 {
-    // XXX not setting up __value_
-    __req_ = __func_();
+    ::new(std::addressof(this->__value_)) _Rp;  // default ctor
+    __req_ = __func_(*reinterpret_cast<_Rp*>(std::addressof(this->__value_)));
 }
 
 template <class _Rp, class _Fp>
@@ -1023,9 +1023,10 @@ void
 __mpi_assoc_state<_Rp, _Fp>::__wait()
 {
     MPI_Status st;
+    // not thread-safe
     // XXX needs polish
     if (MPI_Wait(&__req_, &st) == MPI_SUCCESS)
-        this->set_value();
+        this->__state_ |= base::__constructed | base::ready;
     else
         this->set_exception(make_exception_ptr(runtime_error("MPI_Wait")));
 }
@@ -2262,8 +2263,6 @@ class __async_func
     tuple<_Fp, _Args...> __f_;
 
 public:
-    typedef typename __invoke_of<_Fp, _Args...>::type _Rp;
-
     _LIBCPP_INLINE_VISIBILITY
     explicit __async_func(_Fp&& __f, _Args&&... __args)
         : __f_(std::move(__f), std::move(__args)...) {}
@@ -2271,17 +2270,20 @@ public:
     _LIBCPP_INLINE_VISIBILITY
     __async_func(__async_func&& __f) : __f_(std::move(__f.__f_)) {}
 
-    _Rp operator()()
+    template <typename ..._ExArgs>
+    decltype(auto) operator()(_ExArgs&&... __exargs)
     {
         typedef typename __make_tuple_indices<1+sizeof...(_Args), 1>::type _Index;
-        return __execute(_Index());
+        return __execute(_Index(), std::forward<_ExArgs>(__exargs)...);
     }
 private:
-    template <size_t ..._Indices>
-    _Rp
-    __execute(__tuple_indices<_Indices...>)
+    template <size_t ..._Indices, typename ..._ExArgs>
+    decltype(auto)
+    __execute(__tuple_indices<_Indices...>, _ExArgs&&... __exargs)
     {
-        return __invoke(std::move(std::get<0>(__f_)), std::move(std::get<_Indices>(__f_))...);
+        return __invoke(std::move(std::get<0>(__f_)),
+            std::forward<_ExArgs>(__exargs)...,
+            std::move(std::get<_Indices>(__f_))...);
     }
 };
 
@@ -2293,7 +2295,8 @@ future<typename __invoke_of<typename decay<_Fp>::type, typename decay<_Args>::ty
 async(launch __policy, _Fp&& __f, _Args&&... __args)
 {
     typedef __async_func<typename decay<_Fp>::type, typename decay<_Args>::type...> _BF;
-    typedef typename _BF::_Rp _Rp;
+    typedef typename __invoke_of<typename decay<_Fp>::type,
+        typename decay<_Args>::type...>::type _Rp;
 
 #ifndef _LIBCPP_NO_EXCEPTIONS
     try
@@ -2314,14 +2317,22 @@ async(launch __policy, _Fp&& __f, _Args&&... __args)
 }
 
 template <class _Fp, class... _Args>
-//future<typename __invoke_of<typename decay<_Fp>::type, typename decay<_Args>::type...>::type>
 auto
 mpi_async(_Fp&& __f, _Args&&... __args)
 {
     typedef __async_func<typename decay<_Fp>::type, typename decay<_Args>::type...> _BF;
-    //typedef typename _BF::_Rp _Rp;
 
     return __make_mpi_assoc_state<void>(_BF(__decay_copy(std::forward<_Fp>(__f)),
+            __decay_copy(std::forward<_Args>(__args))...));
+}
+
+template <class _Rp, class _Fp, class... _Args>
+auto
+mpi_async(_Fp&& __f, _Args&&... __args)
+{
+    typedef __async_func<typename decay<_Fp>::type, typename decay<_Args>::type...> _BF;
+
+    return __make_mpi_assoc_state<_Rp>(_BF(__decay_copy(std::forward<_Fp>(__f)),
             __decay_copy(std::forward<_Args>(__args))...));
 }
 

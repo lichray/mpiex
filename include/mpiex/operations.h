@@ -72,4 +72,17 @@ recv(communicator comm, int src, T& v, int tag = 0)
     return recv(comm, src, std::addressof(v), 1, tag);
 }
 
+template <typename T>
+inline
+auto
+receive(communicator comm, int src, int tag = 0)
+{
+    return mpi_async<T>([=](T& v)
+        {
+            MPI_Request r;
+            MPI_Irecv(std::addressof(v), 1, mpi_type_of<T>{}, src, tag, comm.get(), &r);
+            return r;
+        });
+}
+
 }
