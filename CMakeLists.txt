@@ -49,6 +49,7 @@ if(BUILD_TESTING)
 		get_filename_component(test_suite ${test_src} NAME_WE)
 		add_executable(${test_suite} ${test_src})
 		target_link_libraries(${test_suite} mpiex)
-		add_test(${test_suite} ${MPIEXEC} tests/${test_suite})
+		add_test(${test_suite} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 5
+            tests/${test_suite})
 	endforeach()
 endif()

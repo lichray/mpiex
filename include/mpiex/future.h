@@ -366,6 +366,7 @@ template <class R, class Alloc> struct uses_allocator<packaged_task<R>, Alloc>;
 #include <thread>
 #include <condition_variable>
 #include <future>
+#include <stdexcept>
 
 namespace mpiex
 {
@@ -387,6 +388,7 @@ using std::tuple;
 using std::exception_ptr;
 using std::rethrow_exception;
 using std::current_exception;
+using std::runtime_error;
 
 using std::allocator;
 using std::allocator_arg;
@@ -518,7 +520,8 @@ public:
 
     void __make_ready();
     _LIBCPP_INLINE_VISIBILITY
-    bool __is_ready() const {return (__state_ & ready) != 0;}
+    bool is_ready() { return __is_ready(); }
+    virtual bool __is_ready() {return (__state_ & ready) != 0;}
 
     void set_value();
 
@@ -526,7 +529,8 @@ public:
 
     void copy();
 
-    void wait();
+    void wait() { __wait(); }
+    virtual void __wait();
     template <class _Rep, class _Period>
         future_status
         _LIBCPP_INLINE_VISIBILITY
@@ -964,6 +968,148 @@ __async_assoc_state<void, _Fp>::__on_zero_shared() _NOEXCEPT
     base::__on_zero_shared();
 }
 
+// __mpi_assoc_state
+
+template <class _Rp, class _Fp>
+class __mpi_assoc_state
+    : public __assoc_state<_Rp>
+{
+    typedef __assoc_state<_Rp> base;
+
+    _Fp __func_;
+    MPI_Request __req_;
+
+    virtual void __on_zero_shared() _NOEXCEPT;
+public:
+#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    _LIBCPP_INLINE_VISIBILITY
+    explicit __mpi_assoc_state(_Fp&& __f);
+#endif
+
+    virtual bool __is_ready() override;
+    virtual void __wait() override;
+    virtual void __execute() override;
+};
+
+#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+
+template <class _Rp, class _Fp>
+inline
+__mpi_assoc_state<_Rp, _Fp>::__mpi_assoc_state(_Fp&& __f)
+    : __func_(std::forward<_Fp>(__f))
+{
+}
+
+#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+
+template <class _Rp, class _Fp>
+void
+__mpi_assoc_state<_Rp, _Fp>::__execute()
+{
+    // XXX not setting up __value_
+    __req_ = __func_();
+}
+
+template <class _Rp, class _Fp>
+void
+__mpi_assoc_state<_Rp, _Fp>::__on_zero_shared() _NOEXCEPT
+{
+    this->__wait();
+    base::__on_zero_shared();
+}
+
+template <class _Rp, class _Fp>
+void
+__mpi_assoc_state<_Rp, _Fp>::__wait()
+{
+    MPI_Status st;
+    // XXX needs polish
+    if (MPI_Wait(&__req_, &st) == MPI_SUCCESS)
+        this->set_value();
+    else
+        this->set_exception(make_exception_ptr(runtime_error("MPI_Wait")));
+}
+
+template <class _Rp, class _Fp>
+bool
+__mpi_assoc_state<_Rp, _Fp>::__is_ready()
+{
+    MPI_Status st;
+    int finished;
+    MPI_Test(&__req_, &finished, MPI_STATUS_IGNORE);
+    return finished;
+}
+
+template <class _Fp>
+class __mpi_assoc_state<void, _Fp>
+    : public __assoc_sub_state
+{
+    typedef __assoc_sub_state base;
+
+    _Fp __func_;
+    MPI_Request __req_;
+
+    virtual void __on_zero_shared() _NOEXCEPT;
+public:
+#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    _LIBCPP_INLINE_VISIBILITY
+    explicit __mpi_assoc_state(_Fp&& __f);
+#endif
+
+    virtual bool __is_ready() override;
+    virtual void __wait() override;
+    virtual void __execute();
+};
+
+#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+
+template <class _Fp>
+inline
+__mpi_assoc_state<void, _Fp>::__mpi_assoc_state(_Fp&& __f)
+    : __func_(std::forward<_Fp>(__f))
+{
+}
+
+#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+
+template <class _Fp>
+void
+__mpi_assoc_state<void, _Fp>::__execute()
+{
+    __req_ = __func_();
+}
+
+template <class _Fp>
+void
+__mpi_assoc_state<void, _Fp>::__on_zero_shared() _NOEXCEPT
+{
+    this->__wait();
+    base::__on_zero_shared();
+}
+
+template <class _Fp>
+void
+__mpi_assoc_state<void, _Fp>::__wait()
+{
+    MPI_Status st;
+    // not thread-safe
+    // XXX needs polish
+    if (MPI_Wait(&__req_, &st) == MPI_SUCCESS)
+        __state_ |= __constructed | ready;
+    else
+        this->set_exception(make_exception_ptr(runtime_error("MPI_Wait")));
+}
+
+template <class _Fp>
+bool
+__mpi_assoc_state<void, _Fp>::__is_ready()
+{
+    MPI_Status st;
+    int finished;
+    MPI_Test(&__req_, &finished, MPI_STATUS_IGNORE);
+    return finished;
+}
+
 template <class _Rp> class _LIBCPP_TYPE_VIS_ONLY promise;
 template <class _Rp> class _LIBCPP_TYPE_VIS_ONLY shared_future;
 
@@ -987,6 +1133,10 @@ __make_async_assoc_state(_Fp&& __f);
 __make_async_assoc_state(_Fp __f);
 #endif
 
+template <class _Rp, class _Fp>
+future<_Rp>
+__make_mpi_assoc_state(_Fp&& __f);
+
 template <class _Rp>
 class _LIBCPP_TYPE_VIS_ONLY future
 {
@@ -1008,6 +1158,9 @@ class _LIBCPP_TYPE_VIS_ONLY future
     template <class _R1, class _Fp>
         friend future<_R1> __make_async_assoc_state(_Fp __f);
 #endif
+
+    template <class _R1, class _Fp>
+        friend future<_R1> __make_mpi_assoc_state(_Fp&& __f);
 
 public:
     _LIBCPP_INLINE_VISIBILITY
@@ -1112,6 +1265,9 @@ class _LIBCPP_TYPE_VIS_ONLY future<_Rp&>
         friend future<_R1> __make_async_assoc_state(_Fp __f);
 #endif
 
+    template <class _R1, class _Fp>
+        friend future<_R1> __make_mpi_assoc_state(_Fp&& __f);
+
 public:
     _LIBCPP_INLINE_VISIBILITY
     future() _NOEXCEPT : __state_(nullptr) {}
@@ -1209,6 +1365,9 @@ class _LIBCPP_TYPE_VIS future<void>
     template <class _R1, class _Fp>
         friend future<_R1> __make_async_assoc_state(_Fp __f);
 #endif
+
+    template <class _R1, class _Fp>
+        friend future<_R1> __make_mpi_assoc_state(_Fp&& __f);
 
 public:
     _LIBCPP_INLINE_VISIBILITY
@@ -2086,6 +2245,17 @@ __make_async_assoc_state(_Fp __f)
     return future<_Rp>(__h.get());
 }
 
+template <class _Rp, class _Fp>
+future<_Rp>
+__make_mpi_assoc_state(_Fp&& __f)
+{
+    unique_ptr<__mpi_assoc_state<_Rp, _Fp>, __release_shared_count>
+        __h(new __mpi_assoc_state<_Rp, _Fp>(std::forward<_Fp>(__f)));
+    // must be an MPI non-blocking operation
+    __h.get()->__execute();
+    return future<_Rp>(__h.get());
+}
+
 template <class _Fp, class... _Args>
 class __async_func
 {
@@ -2141,6 +2311,18 @@ async(launch __policy, _Fp&& __f, _Args&&... __args)
         return __make_deferred_assoc_state<_Rp>(_BF(__decay_copy(std::forward<_Fp>(__f)),
                                                         __decay_copy(std::forward<_Args>(__args))...));
     return future<_Rp>{};
+}
+
+template <class _Fp, class... _Args>
+//future<typename __invoke_of<typename decay<_Fp>::type, typename decay<_Args>::type...>::type>
+auto
+mpi_async(_Fp&& __f, _Args&&... __args)
+{
+    typedef __async_func<typename decay<_Fp>::type, typename decay<_Args>::type...> _BF;
+    //typedef typename _BF::_Rp _Rp;
+
+    return __make_mpi_assoc_state<void>(_BF(__decay_copy(std::forward<_Fp>(__f)),
+            __decay_copy(std::forward<_Args>(__args))...));
 }
 
 template <class _Fp, class... _Args>

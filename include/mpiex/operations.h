@@ -23,6 +23,53 @@
  * SUCH DAMAGE.
  */
 
-#pragma once
+#include "future.h"
+#include "traits.h"
+#include "communicator.h"
 
-#include "mpiex/operations.h"
+namespace mpiex
+{
+
+template <typename T>
+inline
+future<void>
+send(communicator comm, int dest, T const* p, size_t sz, int tag = 0)
+{
+    return mpi_async([=]
+        {
+            MPI_Request r;
+            MPI_Isend(p, int(sz), mpi_type_of<T>{}, dest, tag, comm.get(), &r);
+            return r;
+        });
+}
+
+template <typename T>
+inline
+future<void>
+recv(communicator comm, int src, T* p, size_t sz, int tag = 0)
+{
+    return mpi_async([=]
+        {
+            MPI_Request r;
+            MPI_Irecv(p, int(sz), mpi_type_of<T>{}, src, tag, comm.get(), &r);
+            return r;
+        });
+}
+
+template <typename T>
+inline
+future<void>
+send(communicator comm, int dest, T const& v, int tag = 0)
+{
+    return send(comm, dest, std::addressof(v), 1, tag);
+}
+
+template <typename T>
+inline
+future<void>
+recv(communicator comm, int src, T& v, int tag = 0)
+{
+    return recv(comm, src, std::addressof(v), 1, tag);
+}
+
+}

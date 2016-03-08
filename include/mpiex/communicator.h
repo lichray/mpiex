@@ -25,4 +25,40 @@
 
 #pragma once
 
-#include "mpiex/operations.h"
+#include <mpi.h>
+
+namespace mpiex
+{
+
+struct communicator
+{
+	communicator() : communicator(MPI_COMM_WORLD)
+	{}
+
+	explicit communicator(MPI_Comm comm) : comm_(comm)
+	{};
+
+	int rank() const
+	{
+		int r;
+		MPI_Comm_rank(get(), &r);
+		return r;
+	}
+
+	int size() const
+	{
+		int r;
+		MPI_Comm_size(get(), &r);
+		return r;
+	}
+
+	MPI_Comm get() const
+	{
+		return comm_;
+	}
+
+private:
+	MPI_Comm comm_;
+};
+
+}

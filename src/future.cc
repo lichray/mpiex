@@ -65,7 +65,7 @@ __assoc_sub_state::copy()
 }
 
 void
-__assoc_sub_state::wait()
+__assoc_sub_state::__wait()
 {
     unique_lock<mutex> __lk(__mut_);
     __sub_wait(__lk);

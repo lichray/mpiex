@@ -25,4 +25,61 @@
 
 #pragma once
 
-#include "mpiex/operations.h"
+#include <mpi.h>
+
+#include <type_traits>
+
+namespace mpiex
+{
+
+static_assert(std::is_same<MPI_Datatype, int>{}, "");
+
+template <int v>
+using int_c = std::integral_constant<int, v>;
+
+template <typename T>
+struct mpi_type_of;
+
+template <>
+struct mpi_type_of<char> : int_c<MPI_CHAR> {};
+
+template <>
+struct mpi_type_of<wchar_t> : int_c<MPI_WCHAR> {};
+
+template <>
+struct mpi_type_of<signed char> : int_c<MPI_SIGNED_CHAR> {};
+
+template <>
+struct mpi_type_of<short> : int_c<MPI_SHORT> {};
+
+template <>
+struct mpi_type_of<int> : int_c<MPI_INT> {};
+
+template <>
+struct mpi_type_of<long> : int_c<MPI_LONG> {};
+
+template <>
+struct mpi_type_of<long long> : int_c<MPI_LONG_LONG> {};
+
+template <>
+struct mpi_type_of<float> : int_c<MPI_FLOAT> {};
+
+template <>
+struct mpi_type_of<double> : int_c<MPI_DOUBLE> {};
+
+template <>
+struct mpi_type_of<long double> : int_c<MPI_LONG_DOUBLE> {};
+
+template <>
+struct mpi_type_of<unsigned char> : int_c<MPI_UNSIGNED_CHAR> {};
+
+template <>
+struct mpi_type_of<unsigned int> : int_c<MPI_UNSIGNED> {};
+
+template <>
+struct mpi_type_of<unsigned long> : int_c<MPI_UNSIGNED_LONG> {};
+
+template <>
+struct mpi_type_of<unsigned long long> : int_c<MPI_UNSIGNED_LONG_LONG> {};
+
+}
