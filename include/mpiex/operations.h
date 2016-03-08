@@ -85,4 +85,18 @@ receive(communicator comm, int src, int tag = 0)
         });
 }
 
+template <typename T, typename F>
+inline
+auto
+reduce(communicator comm, int dest, T const& x, F)
+{
+    return mpi_async<T>([=](T& y)
+        {
+            MPI_Request r;
+            MPI_Ireduce(std::addressof(x), std::addressof(y), 1, mpi_type_of<T>{},
+                mpi_op_of<F>{}, dest, comm.get(), &r);
+            return r;
+        });
+}
+
 }

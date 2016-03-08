@@ -33,7 +33,7 @@ int reduce_sum(mpiex::communicator comm, float a) {
 
 TEST_CASE("example2")
 {
-  auto comm = mpiex::communicator(MPI_COMM_WORLD);
+  auto comm = mpiex::communicator();
   float a = std::pow(comm.rank() + 1, 2);
 
   a = reduce_sum(comm, a);

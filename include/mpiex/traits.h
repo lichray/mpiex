@@ -28,12 +28,16 @@
 #include <mpi.h>
 
 #include <type_traits>
+#include <functional>
 
 namespace mpiex
 {
 
 template <MPI_Datatype v>
 using mpi_dt_c = std::integral_constant<MPI_Datatype, v>;
+
+template <MPI_Op v>
+using mpi_op_c = std::integral_constant<MPI_Op, v>;
 
 template <typename T>
 struct mpi_type_of;
@@ -79,5 +83,29 @@ struct mpi_type_of<unsigned long> : mpi_dt_c<MPI_UNSIGNED_LONG> {};
 
 template <>
 struct mpi_type_of<unsigned long long> : mpi_dt_c<MPI_UNSIGNED_LONG_LONG> {};
+
+template <typename T>
+struct mpi_op_of;
+
+template <>
+struct mpi_op_of<std::plus<>> : mpi_op_c<MPI_SUM> {};
+
+template <>
+struct mpi_op_of<std::multiplies<>> : mpi_op_c<MPI_PROD> {};
+
+template <>
+struct mpi_op_of<std::logical_and<>> : mpi_op_c<MPI_LAND> {};
+
+template <>
+struct mpi_op_of<std::logical_or<>> : mpi_op_c<MPI_LOR> {};
+
+template <>
+struct mpi_op_of<std::bit_and<>> : mpi_op_c<MPI_BAND> {};
+
+template <>
+struct mpi_op_of<std::bit_or<>> : mpi_op_c<MPI_BOR> {};
+
+template <>
+struct mpi_op_of<std::bit_xor<>> : mpi_op_c<MPI_BXOR> {};
 
 }
