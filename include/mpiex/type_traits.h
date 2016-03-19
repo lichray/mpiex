@@ -617,7 +617,7 @@ template <class _Tp> _LIBCPP_CONSTEXPR bool is_void_v
 // __is_nullptr_t
 
 template <class _Tp> struct __is_nullptr_t_impl       : public false_type {};
-template <>          struct __is_nullptr_t_impl<nullptr_t> : public true_type {};
+template <>          struct __is_nullptr_t_impl<std::nullptr_t> : public true_type {};
 
 template <class _Tp> struct _LIBCPP_TYPE_VIS_ONLY __is_nullptr_t
     : public __is_nullptr_t_impl<typename remove_cv<_Tp>::type> {};
@@ -929,7 +929,7 @@ template <class _Tp> struct _LIBCPP_TYPE_VIS_ONLY is_scalar
                                      __is_nullptr_t<_Tp>::value    ||
                                      is_enum<_Tp>::value           > {};
 
-template <> struct _LIBCPP_TYPE_VIS_ONLY is_scalar<nullptr_t> : public true_type {};
+template <> struct _LIBCPP_TYPE_VIS_ONLY is_scalar<std::nullptr_t> : public true_type {};
 
 #if _LIBCPP_STD_VER > 14 && !defined(_LIBCPP_HAS_NO_VARIABLE_TEMPLATES)
 template <class _Tp> _LIBCPP_CONSTEXPR bool is_scalar_v

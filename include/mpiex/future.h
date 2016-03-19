@@ -372,6 +372,7 @@ namespace mpiex
 {
 
 using std::unique_ptr;
+using std::nullptr_t;
 
 using std::lock_guard;
 using std::unique_lock;
