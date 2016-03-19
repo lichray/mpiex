@@ -9,6 +9,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY build)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY tests)
 
 find_package(MPI REQUIRED)
+find_program(POD2MAN pod2man)
 
 if(NOT MSVC)
 	add_definitions(-Wall -std=c++1y)
@@ -50,6 +51,16 @@ if(BUILD_TESTING)
 		add_executable(${test_suite} ${test_src})
 		target_link_libraries(${test_suite} mpiex)
 		add_test(${test_suite} ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} 5
-            tests/${test_suite})
+		    tests/${test_suite})
 	endforeach()
+endif()
+
+if(POD2MAN)
+	add_custom_command(
+	    OUTPUT mpiex.3
+	    DEPENDS README.pod
+	    COMMAND ${POD2MAN}
+	    ARGS --name=mpiex --section=3 --center="MPIex Documentation"
+	    --quotes='`'"'" --release="mpiex 0.1" README.pod mpiex.3)
+	add_custom_target(man DEPENDS mpiex.3)
 endif()

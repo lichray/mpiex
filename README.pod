@@ -1,0 +1,230 @@
+=head1 NAME
+
+mpiex -- std::future-powered MPI non-blocking operations
+
+=head1 LIBRARY
+
+libmpiex.a, -lmpiex
+
+=head1 SYNOPSIS
+
+  #include <mpiex.h>
+
+  namespace mpiex
+  {
+    class communicator;
+
+    template <typename T>
+    future<void>
+    send(communicator comm, int dest, T const& v, int tag = 0);
+
+    template <typename T>
+    future<void>
+    recv(communicator comm, int src, T& v, int tag = 0);
+
+    template <typename T>
+    future<T>
+    receive(communicator comm, int src, int tag = 0);
+
+    template <typename T, typename F>
+    future<T>
+    auto
+    reduce(communicator comm, int dest, T const& x, F);
+
+    template <typename T>
+    future<void>
+    send(communicator comm, int dest, T const* p, size_t sz, int tag = 0);
+
+    template <typename T>
+    future<void>
+    recv(communicator comm, int src, T* p, size_t sz, int tag = 0);
+
+    template <typename Fp, typename... Args>
+    future<void>
+    mpi_async(Fp&& f, Args&&... args);
+
+    template <typename Rp, typename Cp, typename... Args>
+    future<Rp>
+    mpi_async(Cp&& f, Args&&... args);
+
+  };
+
+=head1 DESCRIPTION
+
+MPIex is a C++ library based on the MPI C API to provide the access to the
+MPI non-blocking operations with the Future-Promise paradigm.
+
+Each operation returns an object of C<< mpiex::future<void> >> or
+C<< mpiex::future<T> >>, where C<void> represents an operation with only
+side-effects, and C<T> is the type of the result of a computation.
+
+This library provides the full C++11 C<< <future> >> interface, meaning a
+future object for type C<T> created from a C++11-compatible API such as
+C<mpiex::async> will have the same type returned from the objects created
+from the MPI async operations, so that if you have an existing generic
+function to work with a future-like type, the same instantiation of the
+template may work with
+both kinds of the future objects, e.g. the local ones and the MPI ones.
+
+=head2 Class C<communicator>
+
+  namespace mpiex
+  {
+    class communicator
+    {
+    public:
+      communicator();
+      explicit communicator(MPI_Comm comm);
+
+      int rank() const;
+      int size() const;
+      MPI_Comm get() const
+    };
+  }
+
+=head3 C<communicator> constructors
+
+    communicator();
+
+I<Effects:> Constructs a C<communicator> of C<MPI_COMM_WORLD>.
+
+    explicit communicator(MPI_Comm comm);
+
+I<Effects:> Constructs a C<communicator> of C<comm>.
+
+=head3 C<communicator> accessors
+
+    int rank() const;
+
+I<Returns:> The rank of the calling process in the communicator.
+
+    int size() const;
+
+I<Returns:> The size of the group associated with the communicator.
+
+    MPI_Comm get() const
+
+I<Returns:> The underlying handle object for this communicator.
+
+=head2 MPI non-blocking operations
+
+In the following section, the type of the input data needs not to be specified
+via an C<MPI_Datatype> function argument, and the type of the output data may
+need to be indicated via an explicit function template argument.
+
+    template <typename T>
+    future<void>
+    send(communicator comm, int dest, T const& v, int tag = 0);
+
+I<Effects:> Sends an object of type C<T> to the node with rank C<dest>.
+
+I<Returns:> A future object to represent the sending process.
+
+    template <typename T>
+    future<void>
+    recv(communicator comm, int src, T& v, int tag = 0);
+
+I<Effects:> Receives an object of type C<T> from the node with rank C<dest>.
+
+I<Returns:> A future object to represent the receiving process.
+
+    template <typename T>
+    future<T>
+    receive(communicator comm, int src, int tag = 0);
+
+I<Effects:> Receives an object of type C<T> from the node with rank C<dest>.
+
+I<Returns:> A future object for type C<T> to represent the result.
+
+    template <typename T, typename F>
+    future<T>
+    auto
+    reduce(communicator comm, int dest, T const& x, F);
+
+I<Effects:> Reduces values on all processes to a single value of type C<T>
+to a root node with rank C<dest>.
+
+I<Returns:> A future object for type C<T> to represent the result.
+
+    template <typename T>
+    future<void>
+    send(communicator comm, int dest, T const* p, size_t sz, int tag = 0);
+
+I<Requires:> C<p> points to an array of at least C<sz> elements of C<T>.
+
+I<Effects:> Sends the of array of C<T> of length C<sz> whose the first element
+is designated by C<p>, to the node with rank C<dest>.
+
+I<Returns:> A future object to represent the sending process.
+
+I<Remarks:> The lifetime of the objects being sending shall last longer than
+the sending process, and shall not be modified at the same time.
+[I<Note:> You can get rid of this restriction by capturing the objects when
+re-wrapping the send operation with C<mpi_async>. I<--end note>]
+
+    template <typename T>
+    future<void>
+    recv(communicator comm, int src, T* p, size_t sz, int tag = 0);
+
+I<Requires:> C<p> points to an array can store at least C<sz> elements of C<T>.
+
+I<Effects:> Receives C<sz> elements of C<T> from the node with rank C<dest>,
+and writes them into the array pointed to by the address C<p>.
+
+I<Returns:> A future object to represent the receiving process.
+
+I<Remarks:> The lifetime of the array to to receive shall last longer than
+the receiving process, and shall not be otherwise modified at the same time.
+[I<Note:> You can get rid of this restriction by capturing the objects when
+re-wrapping the receive operation with C<mpi_async>. I<--end note>]
+
+
+=head2 Function template C<mpi_async>
+
+    template <typename Fp, typename... Args>
+    future<void>
+    mpi_async(Fp&& f, Args&&... args);
+
+I<Requires:> C<f> is an invokable object with return type C<MPI_Request>.
+
+I<Effects:> Forwards C<f> and all the arguments, I<C<DECAY_COPY>> them to the
+shared state associated with a future object, and I<C<INVOKE>> the function
+with the saved arguments.
+
+I<Returns:> The future object carrying the shared state.
+
+    template <typename Rp, typename Cp, typename... Args>
+    future<Rp>
+    mpi_async(Cp&& f, Args&&... args);
+
+I<Requires:> C<f> is an invokable object taking an non-C<const> lvalue object
+of type C<Rp>, and returns an object of C<MPI_Request>.  C<Rp> shall meet the
+requirements of C<DefaultConstructible>.
+
+I<Effects:> Forwards C<f> and all the arguments, I<C<DECAY_COPY>> them to the
+shared state associated with a future object, and I<C<INVOKE>> the function
+with an lvalue of a default constructed object of C<Rp> as the first
+argument, and all the saved arguments coming after it.
+
+I<Returns:> The future object carrying the shared state and the result value.
+
+
+=head1 BUGS
+
+It is currently unsupported that to make the C<mpiex::future> objects returned
+from C<mpi_async> and its wrappers thread-safe by sharing their states with
+the C<mpiex::shared_future> objects.
+
+The type-erasure is not optimized for binary size yet, meaning if you have
+many wrappers around C<mpi_async>, the binary size of the application may
+increase for no good reason.
+
+=head1 SEE ALSO
+
+std::future L<http://en.cppreference.com/w/cpp/thread/future>
+
+This project is hosted on L<https://github.com/lichray/mpiex>.
+
+=head1 AUTHOR
+
+Zhihao Yuan <lichray@gmail.com>, modified from B<libc++>.
