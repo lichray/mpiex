@@ -28,7 +28,6 @@ libmpiex.a, -lmpiex
 
     template <typename T, typename F>
     future<T>
-    auto
     reduce(communicator comm, int dest, T const& x, F);
 
     template <typename T>
@@ -138,7 +137,6 @@ I<Returns:> A future object for type C<T> to represent the result.
 
     template <typename T, typename F>
     future<T>
-    auto
     reduce(communicator comm, int dest, T const& x, F);
 
 I<Effects:> Reduces values on all processes to a single value of type C<T>
